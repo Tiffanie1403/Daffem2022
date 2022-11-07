@@ -1,0 +1,200 @@
+	PROGRAM Main
+	!*************************************************************************
+	! Main Program, control the time resolution
+	!
+	!*************************************************************************
+	
+	USE Types
+	USE PublicVar
+	USE Data_mod
+	USE Initialisation
+	USE LHS_RHS_SchemeSelection
+	USE SystemResolution
+	USE PostProcess
+	USE WriteSol
+	USE L2Norm
+	USE Newton
+	USE GradientReconstruction
+	USE Algebra
+	USE IterativeProcess
+	
+	IMPLICIT NONE
+	
+	type(MeshType)      				:: Mesh
+	type(DataStructure) 				:: Data
+	type(SolStructure)  				:: Sol, Sol_prec, Sol_2prec
+    type(SparseMatrix)  				:: Mat
+	!-----------------------------------------------------------------------------
+	INTEGER 							:: i, Nv, NDof, iNewton, j, k, ie, nmax, tour
+	INTEGER 							:: type, n , m, nBMaxIter, Ns, Ns_prec
+	REAL*8  							:: alpha_l, SpeedJump, JumpF, SpeedJump2, JumpF2
+	!-----------------------------------------------------------------------------
+	LOGICAL 							:: endOfIter, Ttest, PrimalData
+	!-----------------------------------------------------------------------------
+	CHARACTER(len=99) 					:: charTmp1, charTmp2,charTmp3
+	REAL*8, DIMENSION(:,:), ALLOCATABLE :: A,Q,R 
+	REAL*8, DIMENSION(:), ALLOCATABLE 	:: x,b 
+    REAL*8							  	:: JumpFx,JumpFy
+	!-----------------------------------------------------------------------------
+	INTEGER 							:: nnz
+	!-----------------------------------------------------------------------------
+	
+	PRINT*, ' '
+	PRINT*, '********    Icing Branch -- Stefan Solver    ********'
+	PRINT*, " "
+	
+	PRINT*, ' -- Initialization phase -- '
+	
+	CALL GetData(Data) ! read datat files 
+	CALL SetPublicVar(Data) ! define public variables 
+	
+	! Initialization and allocation phase at Tinit
+	CALL Simulation_Tinit(Sol_prec,Sol_2prec,Sol,Mesh,Data,Mat)
+		    
+    IF (Data%Icing) THEN
+		!ici ce sont des variables pour se déplacer dans le tableau 
+		Ns = Mesh%NarEmb + 1 + mesh%PtEmb           !nombre de noeud sur l'interface au temps n+1
+		Ns_prec = Mesh%NarEmb_prec + 1 + mesh%PtEmb 
+    ELSE
+       Ns = 0.d0  ; Ns_prec = 0.d0
+    END IF 
+      
+	WRITE(charTmp2,*) Data%h
+	
+	PRINT*, ' -- End Initialization phase -- '
+	!open(unit = 111,file='Interface_Data'//TRIM(ADJUSTL(charTmp2))//'.data', action="write",position="append")
+	!open(unit = 112,file='Jump_Data'//TRIM(ADJUSTL(charTmp2))//'.data', action="write",position="append")
+
+
+	Data%tour = 0 
+	PRINT*,"Value of Tinit", Data%T 
+	PRINT*,"Value of Tmax", data%TMax 
+	!DO WHILE( Data%Tour < Data%TourMax  )
+	DO WHILE( Data%T < Data%TMax  )
+		
+		
+		!Update of the current time 
+		Data%Tour = Data%Tour + 1 ! we need to update the tour counter to know we work on the first iteration
+		Data%T    = Data%T+Data%Dt ! Current time where we want the solution 
+		
+		!PRINT*,"Value of DT",Data%Dt 
+		
+		WRITE(charTmp1,*) Data%tour
+		PRINT*,"Resolution at t = ", Data%T,"Position :", Icing_L1 
+		PRINT*, "Iterations :: "//TRIM(ADJUSTL(charTmp1)),"/",Data%tourMAx
+		PRINT*, " "
+							
+		
+		!ajouter ca dans l'init
+		IF(icas==001) THEN 
+			CALL MeanFluxReconstruct22(Data, Mesh, Sol_prec, SpeedJump, JumpF) !definition of the previous jump value and speed at time n
+			CALL MeanFluxReconstruct22(Data, Mesh, Sol_2prec, SpeedJump2, JumpF2) !definition of the previous jump value and speed at time n
+			IF(DATA%Tour == 1) THEN !valeur connu pour initialisation 
+				SpeedJump  = Icing_chi*sqrt(Icing_alpha_l/(Data%T-Data%DT))
+				SpeedJump2 = Icing_chi*sqrt(Icing_alpha_l/(Data%T-2.d0*Data%DT))
+			END IF 
+			!WRITE(111,*)Icing_L1+SpeedJump*Data%Dt,2.d0*Icing_chi*sqrt(Icing_alpha_l*Data%T),Data%T
+			!WRITE(112,*)JumpF,Icing_rho*Icing_Lm*Icing_chi*sqrt(Icing_alpha_l/Data%T),Data%T
+		END IF 
+		
+		CALL SimulationInitialisation(Data, Sol, Sol_prec, Sol_2prec, Mesh, Mat, SpeedJump, JumpF, SpeedJump2, JumpF2) !true value imposed for the moment for the displacement of the interface 
+		PRINT*, ' -- Computation of RHS and LHS -- '
+
+		CALL CPU_TIME(t1_assemble)
+		CALL RHS_LHS_SchemeSelection(Data, Mesh, Sol, Sol_prec, Sol_2prec, Mat) !!a modifier 
+		CALL CPU_Time(t2_assemble)
+			
+		PRINT*, ' -- RHS and LHS computed -- '
+		
+		! Solve the system
+		PRINT*, ' '
+		PRINT*, ' -- Resolution of the system, IMPLICIT Resolution  -- '
+		CALL SolveSystem(Data, Sol, Mesh, Mat, "Resolution")
+		PRINT*, ' -- System Solved -- '
+		PRINT*, ' '
+			 
+		PRINT*, ' -- Post Process Operation -- '
+		CALL CPU_TIME(t1_Postprocess)
+			
+	    ! Post process
+		CALL PostProcessSolution(Data, Sol, Sol_prec, Sol_2prec, Mesh, Mat) !flux reconstruction added IN CG-PRIMAL 
+
+		CALL CPU_TIME(t2_Postprocess)
+		PRINT*, ' -- Post Process Done -- '
+
+		WRITE(charTmp3,*) Data%tour
+		IF (Data%Output) CALL WriteSolution(Mesh, Sol, Data, TRIM(ADJUSTL(charTmp3)))
+		IF (Data%ComputeError) CALL ComputeL2Norm(Mesh, Sol_prec, Data)
+		
+	END DO !end of the loop until current time is the final time 
+		
+	!CLOSE(111) ; CLOSE(112)
+
+	PRINT*, ' '
+	PRINT*, '******** End of Program    ********'
+	PRINT*, "******** Number of points which have been reconstructed ", nbChangInterface, " times ********"
+	PRINT*, ' '
+	
+	CALL PrintTimes()
+	CONTAINS
+	
+	! display of time execution
+	!======================!
+	SUBROUTINE PrintTimes()
+	!======================!
+	
+	!*************************************************************************
+	! Print the different time values for the different steps of the resolution
+	!
+	!*************************************************************************
+	
+	
+	
+	IMPLICIT NONE
+	CHARACTER(len=99) :: tmp
+	!------------------------
+	REAL :: tTot, tInterest
+	!------------------------
+	
+	tTot = 0.d0 ; tInterest = 0.d0
+	
+	PRINT*, ' '
+	PRINT*, ' ------------------------------------------------------------'
+	PRINT*, ' ----               computational times                  ----'
+	tTot = tTot + t2_initialization - t1_initialization
+	tInterest = tInterest + t2_initialization - t1_initialization
+	WRITE(tmp,'(E10.4)') t2_initialization - t1_initialization
+	PRINT*, '  initialisation + allocation :: '//TRIM(ADJUSTL(tmp))
+	tTot = tTot + t2_assemble - t1_assemble
+	tInterest = tInterest + t2_assemble - t1_assemble
+	WRITE(tmp,'(E10.4)') t2_assemble - t1_assemble
+	PRINT*, '  RHS and LHS assembly        :: '//TRIM(ADJUSTL(tmp))
+	tTot = tTot + t2_matrixTransfer - t1_matrixTransfer
+	WRITE(tmp,'(E10.4)') t2_matrixTransfer - t1_matrixTransfer
+	PRINT*, '  Matrix transfer             :: '//TRIM(ADJUSTL(tmp))
+	tTot = tTot + t2_solve - t1_solve
+	tInterest = tInterest + t2_solve - t1_solve
+	WRITE(tmp,'(E10.4)') t2_solve - t1_solve
+	PRINT*, '  System resolution           :: '//TRIM(ADJUSTL(tmp))
+	tInterest = tInterest + t2_Postprocess - t1_Postprocess
+	tTot = tTot + t2_Postprocess - t1_Postprocess
+	WRITE(tmp,'(E10.4)') t2_Postprocess - t1_Postprocess
+	PRINT*, '  Postprocess                 :: '//TRIM(ADJUSTL(tmp))
+	tTot = tTot + t2_output - t1_Output
+	WRITE(tmp,'(E10.4)') t2_output - t1_Output
+	PRINT*, '  Output                      :: '//TRIM(ADJUSTL(tmp))
+	WRITE(tmp,'(E10.4)') tTot
+	PRINT*, '  Total                       :: '//TRIM(ADJUSTL(tmp))
+	PRINT*, ' ------------------------------------------------------------'
+	PRINT*, ' ---- ---- ---- ----'
+	WRITE(tmp,'(E10.4)') tInterest
+	PRINT*, '  init + assemble + solve + postprocess :: '//TRIM(ADJUSTL(tmp))
+	PRINT*, ' ---- ---- ---- ----'
+	PRINT*, ' ------------------------------------------------------------'
+	PRINT*, ' '
+	
+	END SUBROUTINE PrintTimes
+	!======================!
+	
+	END PROGRAM Main
+	

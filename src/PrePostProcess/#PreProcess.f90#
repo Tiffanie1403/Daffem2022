@@ -1,0 +1,28 @@
+MODULE PreProcess
+
+  USE Types
+
+  IMPLICIT NONE
+
+CONTAINS
+
+  !===========================================!
+  SUBROUTINE PostProcess(data, mesh, sol, mat)
+  !===========================================!
+    
+    IMPLICIT NONE
+    type(DataStructure), INTENT(IN) :: data
+    type(MeshType)     , INTENT(IN) :: mesh
+    type(SolStructure) , INTENT(IN) :: sol
+    type(SparseMatrix) , INTENT(IN) :: mat
+    !-----------------------------------------
+
+    SELECT CASE ( data%space_scheme )
+    CASE ( "CG-Primal" )
+       CALL GreeGaussReconstruction_Primal(sol, mesh, data)
+    END SELECT
+    
+  END SUBROUTINE PostProcess
+  !===========================================!
+  
+END MODULE PreProcess
