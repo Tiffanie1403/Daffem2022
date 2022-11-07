@@ -1,0 +1,7 @@
+1 !Data%N_LS 
+NeumannJump !data%EmbeddedBCType(.)
+Box In  ! Data%LSDef(,)
+0.0002 1.0 !Data%LS_L(,)
+0.0 0.0 !Data%Ls_center
+0.d0 !Data%BCEMBVal
+

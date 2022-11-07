@@ -1,0 +1,36 @@
+General Info
+2 001
+CG IMPLICIT EulerExp
+GMRES-ILU .F. 1 1e-6 EULER 0.02 0.0
+0.1 2. #Data%InitialTime Data%FinalTime
+.T. 0.00008 0.5
+.T. 0.25 1  #Data%SpeedCst Data%Speed Data%SetEquation
+200 200 1.d-10 1.d-10 20 100
+0.22d0
+1.d0 2.d0 0.d0 1.d0
+.F. .F.
+.T. .T.
+.T. .F.
+
+# Permeability Regions
+2
+1
+10.d0 0.d0 0.d0 10.d0
+2
+10.d0 0.d0 0.d0 10.d0
+
+# BC
+4
+1 Dirichlet
+5.d0 0.d0 0.d0
+283.15
+2 Neumann
+5.d0 0.d0 0.d0
+0
+3 Dirichlet
+5.d0 0.d0 0.d0
+-1
+4 Neumann
+5.d0 0.d0 0.d0
+0
+

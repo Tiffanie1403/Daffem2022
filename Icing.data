@@ -1,0 +1,10 @@
+1 2 1 #reference zone 
+0.6 2.1 0.6 # lambda water , lambda ice , lambda airfoil
+.T. 200 #Definition of the interface with nodes number of nodes on the physical interface
+.F. 1. 1.5 1. 10 0.5 # resistance hl ha hi Lh L
+0.0001 0.5 0.0025 #definition de la geometrie metrere pour 0.5 m de longueur et 0.0025 m de hauteur
+1 10
+333000.0 273.15 # Lm Tm 
+4185 2060 4185 # icing_c1 Icing_c2 Icing_c3
+1000 263.15 263.15 300 283.15 0.202522 # rho Tini Tr hte Tw chi 
+1000 # rho paroi 
